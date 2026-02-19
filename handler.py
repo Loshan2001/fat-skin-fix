@@ -180,7 +180,7 @@ class SkinFixApp(
     keep_alive=100,
     min_concurrency=0,
     max_concurrency=5,
-    name="skin-enhance-new-z",
+    name="skin-fix-app1",
 ):
     """Skin Fix - Advanced skin refinement and upscaling."""
     
