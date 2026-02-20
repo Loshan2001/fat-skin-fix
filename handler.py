@@ -269,6 +269,67 @@ class SkinFixApp(
         self._run_warmup()
 
     def _run_warmup(self):
+        """Ultra-light warmup to load models into GPU memory."""
+        debug_log("🔥 Running lightweight warmup...")
+
+    try:
+        # Create tiny dummy image (512x512 is ideal for model loading)
+        dummy = PILImage.new("RGB", (512, 512), (0, 0, 0))
+        buf = BytesIO()
+        dummy.save(buf, format="PNG")
+        image_b64 = base64.b64encode(buf.getvalue()).decode()
+
+        image_name = f"warmup_{uuid.uuid4().hex}.png"
+
+        upload_images([{
+            "name": image_name,
+            "image": image_b64
+        }])
+
+        job = copy.deepcopy(WORKFLOW_JSON)
+        workflow = job["input"]["workflow"]
+
+        # Set dummy image
+        workflow["545"]["inputs"]["image"] = image_name
+
+        # ⚡ MINIMAL SETTINGS
+        workflow["510"]["inputs"]["steps"] = 1
+        workflow["510"]["inputs"]["cfg"] = 1
+        workflow["510"]["inputs"]["denoise"] = 0.1
+
+        workflow["548"]["inputs"]["resolution"] = 512
+        workflow["548"]["inputs"]["max_resolution"] = 512
+
+        workflow["549"]["inputs"]["encode_tile_size"] = 512
+        workflow["549"]["inputs"]["decode_tile_size"] = 512
+
+        workflow["548"]["inputs"]["seed"] = 1
+
+        # Run workflow
+        client_id = str(uuid.uuid4())
+        ws = websocket.WebSocket()
+        ws.connect(f"ws://{COMFY_HOST}/ws?clientId={client_id}")
+
+        requests.post(
+            f"http://{COMFY_HOST}/prompt",
+            json={"prompt": workflow, "client_id": client_id},
+            timeout=30
+        )
+
+        # Wait until done
+        while True:
+            msg = ws.recv()
+            if msg.startswith("{"):
+                data = json.loads(msg)
+                if data.get("type") == "executing" and data["data"]["node"] is None:
+                    break
+
+        ws.close()
+
+        debug_log("✅ Warmup complete — models are hot in GPU.")
+
+    except Exception as e:
+        debug_log(f"⚠️ Warmup failed: {e}")
         """Run a lightweight generation to load models into GPU memory."""
         debug_log("🔥 Starting warmup...")
         try:
@@ -365,8 +426,7 @@ class SkinFixApp(
             if input.mode == "preset":
                 # Use preset settings
                 p = PRESETS[input.preset_name]
-                MAX_RES = 2048
-                target_resolution = min(MAX_RES, max(p["resolution"], input_image_resolution))
+                target_resolution = max(p["resolution"], input_image_resolution)
                 sampler["cfg"] = p["cfg"]
                 sampler["denoise"] = p["denoise"]
 
@@ -377,8 +437,7 @@ class SkinFixApp(
                 # Use custom settings
                 sampler["cfg"] = input.cfg
                 sampler["denoise"] = 0.30 + (input.skin_refinement / 100.0) * 0.10
-                MAX_RES = 2048
-                target_resolution = min(MAX_RES, max(input.upscale_resolution, input_image_resolution))
+                target_resolution = max(input.upscale_resolution, input_image_resolution)
 
             # Apply seed
             sampler["seed"] = input.seed
