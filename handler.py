@@ -178,7 +178,7 @@ class SkinFixOutput(BaseModel):
 class SkinFixApp(
     fal.App,
     keep_alive=100,
-    min_concurrency=1,
+    min_concurrency=0,
     max_concurrency=5,
     name="skin-fix-app2",
 ):
@@ -269,8 +269,48 @@ class SkinFixApp(
         self._run_warmup()
 
     def _run_warmup(self):
-        """Ultra-light warmup to load models into GPU memory."""
-        debug_log("🔥 Running lightweight warmup...")
+        """Super fast warmup just to load models into GPU."""
+        try:
+            debug_log("🔥 Warmup started...")
+
+            # Create dummy image
+            dummy = PILImage.new("RGB", (512, 512), (0, 0, 0))
+            buf = BytesIO()
+            dummy.save(buf, format="PNG")
+            image_b64 = base64.b64encode(buf.getvalue()).decode()
+
+            image_name = f"warmup_{uuid.uuid4().hex}.png"
+
+            upload_images([{
+                "name": image_name,
+                "image": image_b64
+            }])
+
+            job = copy.deepcopy(WORKFLOW_JSON)
+            workflow = job["input"]["workflow"]
+
+            workflow["545"]["inputs"]["image"] = image_name
+
+            # MINIMUM SETTINGS
+            workflow["510"]["inputs"]["steps"] = 1
+            workflow["548"]["inputs"]["resolution"] = 512
+            workflow["548"]["inputs"]["max_resolution"] = 512
+            workflow["549"]["inputs"]["encode_tile_size"] = 512
+            workflow["549"]["inputs"]["decode_tile_size"] = 512
+
+            # Just send request — don't wait
+            requests.post(
+                f"http://{COMFY_HOST}/prompt",
+                json={"prompt": workflow, "client_id": str(uuid.uuid4())},
+                timeout=10
+            )
+
+            debug_log("✅ Warmup queued")
+
+        except Exception as e:
+            debug_log(f"Warmup failed: {e}")
+            """Ultra-light warmup to load models into GPU memory."""
+            debug_log("🔥 Running lightweight warmup...")
 
     try:
         # Create tiny dummy image (512x512 is ideal for model loading)
