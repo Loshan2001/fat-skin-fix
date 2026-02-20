@@ -365,7 +365,8 @@ class SkinFixApp(
             if input.mode == "preset":
                 # Use preset settings
                 p = PRESETS[input.preset_name]
-                target_resolution = max(p["resolution"], input_image_resolution)
+                MAX_RES = 2048
+                target_resolution = min(MAX_RES, max(p["resolution"], input_image_resolution))
                 sampler["cfg"] = p["cfg"]
                 sampler["denoise"] = p["denoise"]
 
@@ -376,7 +377,8 @@ class SkinFixApp(
                 # Use custom settings
                 sampler["cfg"] = input.cfg
                 sampler["denoise"] = 0.30 + (input.skin_refinement / 100.0) * 0.10
-                target_resolution = max(input.upscale_resolution, input_image_resolution)
+                MAX_RES = 2048
+                target_resolution = min(MAX_RES, max(input.upscale_resolution, input_image_resolution))
 
             # Apply seed
             sampler["seed"] = input.seed
