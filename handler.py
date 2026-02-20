@@ -180,7 +180,6 @@ class SkinFixApp(
     keep_alive=120,
     min_concurrency=0,
     max_concurrency=5,
-    flashpack=True,
     name="skin-fix-app2",
 ):
     """Skin Fix - Advanced skin refinement and upscaling."""
